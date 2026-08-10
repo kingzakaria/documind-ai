@@ -156,6 +156,39 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+.pytest_cache/
+
+# Project-specific data (generated at runtime, not source code)
+chroma_db/
+uploads/
+*.pdf
+!test.pdf
+
+# Node / Next.js (for later, once we build the frontend)
+node_modules/
+.next/
+out/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS/editor junk
+.DS_Store
+Thumbs.db
+.vscode/
 
 # Spyder project settings
 .spyderproject
