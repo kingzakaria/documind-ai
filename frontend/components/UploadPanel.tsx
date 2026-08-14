@@ -5,9 +5,10 @@ import { uploadDocument } from "@/lib/api";
 
 interface Props {
   onUploaded: (docId: string, filename: string) => void;
+  token: string;
 }
 
-export default function UploadPanel({ onUploaded }: Props) {
+export default function UploadPanel({ onUploaded, token }: Props) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -16,7 +17,7 @@ export default function UploadPanel({ onUploaded }: Props) {
     setError(null);
     setUploading(true);
     try {
-      const res = await uploadDocument(file);
+      const res = await uploadDocument(file, token);
       onUploaded(res.doc_id, res.filename);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed.");

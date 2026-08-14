@@ -204,6 +204,35 @@ async def ask_question(
     return {"question": question, "answer": answer, "sources_used": len(chunks)}
 
 
+@app.get("/documents/{doc_id}/messages")
+def get_document_messages(
+    doc_id: str,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    conversation = (
+        db.query(models.Conversation)
+        .filter(models.Conversation.doc_id == doc_id, models.Conversation.user_id == current_user.id)
+        .first()
+    )
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Document not found for this account.")
+
+    messages = (
+        db.query(models.Message)
+        .filter(models.Message.conversation_id == conversation.id)
+        .order_by(models.Message.created_at.asc())
+        .all()
+    )
+
+    return {
+        "title": conversation.title,
+        "messages": [
+            {"role": m.role, "content": m.content, "sources_used": m.sources_used} for m in messages
+        ],
+    }
+
+
 @app.get("/conversations")
 def list_conversations(
     current_user: models.User = Depends(auth.get_current_user),
