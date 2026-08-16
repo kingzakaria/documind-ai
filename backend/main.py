@@ -178,6 +178,7 @@ async def ask_question(
     request: Request,
     doc_id: str = Form(...),
     question: str = Form(...),
+    language: str = Form("en"),
     current_user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -191,7 +192,7 @@ async def ask_question(
         raise HTTPException(status_code=404, detail="Document not found for this account.")
 
     chunks = retrieve_chunks(doc_id, question)
-    answer = generate_answer(question, chunks)
+    answer = generate_answer(question, chunks, language)
 
     db.add(models.Message(conversation_id=conversation.id, role="user", content=question))
     db.add(

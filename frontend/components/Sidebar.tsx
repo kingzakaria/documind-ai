@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import SettingsModal from "./SettingsModal";
 import HelpModal from "./HelpModal";
 import ConversationItem from "./ConversationItem";
+import type { Language } from "@/lib/language";
 import {
   fetchConversations,
   updateConversation,
@@ -17,9 +18,18 @@ interface SidebarProps {
   onSelectConversation: (docId: string) => void;
   onLogout: () => void;
   refreshKey: number; // parent bumps this after upload/ask so the list refetches
+  language: Language;
+  onLanguageChange: (language: Language) => void;
 }
 
-export default function Sidebar({ onNewChat, onSelectConversation, onLogout, refreshKey }: SidebarProps) {
+export default function Sidebar({
+  onNewChat,
+  onSelectConversation,
+  onLogout,
+  refreshKey,
+  language,
+  onLanguageChange,
+}: SidebarProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
@@ -157,7 +167,13 @@ export default function Sidebar({ onNewChat, onSelectConversation, onLogout, ref
         </div>
       </aside>
 
-      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && (
+        <SettingsModal
+          onClose={() => setSettingsOpen(false)}
+          language={language}
+          onLanguageChange={onLanguageChange}
+        />
+      )}
       {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
     </>
   );

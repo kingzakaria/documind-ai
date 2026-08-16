@@ -8,27 +8,31 @@ import QuestionInput from "@/components/QuestionInput";
 import AuthGate from "@/components/AuthGate";
 import { uploadDocument, askQuestion, fetchDocumentMessages } from "@/lib/api";
 import { getToken } from "@/lib/auth";
+import { getLanguage, saveLanguage, type Language } from "@/lib/language";
 
 export default function Home() {
   const [token, setTokenState] = useState<string | null>(null);
   const [checkedAuth, setCheckedAuth] = useState(false);
+  const [language, setLanguage] = useState<Language>("en");
 
   const [docId, setDocId] = useState<string | null>(null);
   const [filename, setFilename] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isThinking, setIsThinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Bumped after every upload/ask so the Sidebar's conversation list refetches.
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     setTokenState(getToken());
+    setLanguage(getLanguage());
     setCheckedAuth(true);
   }, []);
 
-  // Wait until we've checked localStorage for a saved token before deciding
-  // whether to show the login screen — avoids a flash of the login page
-  // for someone who's already logged in.
+  function handleLanguageChange(newLanguage: Language) {
+    setLanguage(newLanguage);
+    saveLanguage(newLanguage);
+  }
+
   if (!checkedAuth) {
     return <div className="h-screen bg-[var(--bg)]" />;
   }
@@ -81,7 +85,7 @@ export default function Home() {
     setMessages((prev) => [...prev, { role: "user", content: question }]);
     setIsThinking(true);
     try {
-      const res = await askQuestion(docId, question, token);
+      const res = await askQuestion(docId, question, token, language);
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: res.answer, sourcesUsed: res.sources_used },
@@ -93,14 +97,21 @@ export default function Home() {
       setIsThinking(false);
     }
   }
-  console.log("handleLogout in page.tsx:", typeof handleLogout);
+
+  const isRtl = language === "ar";
+
   return (
-    <div className="flex h-screen bg-[var(--bg)]">
+    <div
+      className={`flex h-screen bg-[var(--bg)] ${isRtl ? "flex-row-reverse" : ""}`}
+      dir={isRtl ? "rtl" : "ltr"}
+    >
       <Sidebar
         onNewChat={handleNewChat}
         onSelectConversation={handleSelectConversation}
         onLogout={handleLogout}
         refreshKey={refreshKey}
+        language={language}
+        onLanguageChange={handleLanguageChange}
       />
 
       <main className="flex flex-1 flex-col overflow-hidden">
