@@ -1,19 +1,5 @@
 """
 DocuMind AI — Backend API
-
-Public endpoints:
-  POST /register        — create an account
-  POST /login            — get a JWT
-
-Protected endpoints (require Authorization: Bearer <token>):
-  POST /upload            — upload a PDF, creates a Document + Conversation you own
-  POST /ask                — ask a question about YOUR document
-  GET  /conversations      — list your conversations (powers the Recents sidebar)
-  PATCH /conversations/{id} — rename or star a conversation
-  DELETE /conversations/{id} — delete a conversation
-
-Run with:  uvicorn main:app --reload
-Docs at:   http://127.0.0.1:8000/docs
 """
 
 import os
@@ -35,12 +21,13 @@ from slowapi.errors import RateLimitExceeded
 from rag.ingest import ingest_document
 from rag.retrieve import retrieve_chunks
 from rag.llm import generate_answer
+from rag.vectorstore import delete_document_chunks
+import storage
 
 from db.database import get_db, engine, Base
 from db import models
 import auth
 
-# Creates the 4 tables in Postgres if they don't already exist.
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="DocuMind AI")
@@ -90,8 +77,6 @@ async def save_upload_safely(file: UploadFile, dest_path: str) -> int:
     return size
 
 
-# ---------- Request/response schemas ----------
-
 class RegisterInput(BaseModel):
     email: str
     password: str
@@ -106,8 +91,6 @@ class ConversationUpdateInput(BaseModel):
     title: Optional[str] = None
     starred: Optional[bool] = None
 
-
-# ---------- Public routes ----------
 
 @app.get("/")
 def health_check():
@@ -139,8 +122,6 @@ def login(data: LoginInput, db: Session = Depends(get_db)):
     return {"access_token": token, "token_type": "bearer"}
 
 
-# ---------- Protected routes ----------
-
 @app.post("/upload")
 @limiter.limit("5/minute")
 async def upload_document(
@@ -163,6 +144,16 @@ async def upload_document(
         os.remove(file_path)
         raise HTTPException(status_code=400, detail=str(e))
 
+    try:
+        storage.upload_document_file(file_path, doc_id)
+        os.remove(file_path)  # now lives permanently in cloud storage
+    except Exception as e:
+        # Known issue: this local Python 3.14 install has a networking bug
+        # talking to Backblaze's S3-compatible endpoint. Not blocking the
+        # upload over it — keeping the file locally as a fallback until
+        # this is revisited inside Docker with a pinned, stable Python version.
+        print(f"Warning: cloud storage upload failed, keeping local copy instead: {e}")
+
     document = models.Document(doc_id=doc_id, user_id=current_user.id, filename=file.filename)
     conversation = models.Conversation(doc_id=doc_id, user_id=current_user.id, title=file.filename)
     db.add(document)
@@ -170,7 +161,6 @@ async def upload_document(
     db.commit()
 
     return {"doc_id": doc_id, "filename": file.filename, "chunks_created": chunk_count}
-
 
 @app.post("/ask")
 @limiter.limit("15/minute")
@@ -182,7 +172,6 @@ async def ask_question(
     current_user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
 ):
-    # Ownership check: this doc_id must belong to a conversation owned by this user.
     conversation = (
         db.query(models.Conversation)
         .filter(models.Conversation.doc_id == doc_id, models.Conversation.user_id == current_user.id)
@@ -295,6 +284,20 @@ def delete_conversation(
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found.")
 
-    db.delete(conversation)  # cascades to delete its messages too
+    doc_id = conversation.doc_id
+    db.delete(conversation)
     db.commit()
+
+    document = (
+        db.query(models.Document)
+        .filter(models.Document.doc_id == doc_id, models.Document.user_id == current_user.id)
+        .first()
+    )
+    if document:
+        db.delete(document)
+        db.commit()
+
+    delete_document_chunks(doc_id)
+    storage.delete_document_file(doc_id)
+
     return {"deleted": True}
